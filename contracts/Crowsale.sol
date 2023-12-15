@@ -7,9 +7,9 @@ contract Crowdsale {
 	Token public token;
 	uint256 public price;
 	uint256 public maxTokens;
-	uint256 public tokenSold;
+	uint256 public tokensSold;
 
-	event Buy (uint256 amount, address buyer);
+	event Buy(uint256 amount, address buyer);
 
 	constructor(
 		Token _token,
@@ -31,9 +31,8 @@ contract Crowdsale {
 		require(token.balanceOf(address(this)) >= _amount);
 		require(token.transfer(msg.sender, _amount));
 
-		tokenSold += _amount;
+		tokensSold += _amount;
 
 		emit Buy(_amount, msg.sender);
 	}
-
-}
+}	

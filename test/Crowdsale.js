@@ -65,7 +65,7 @@ describe('Crowdsale', () => {
 			})
 
 			it('updates tokenSold', async () => {
-				expect(await crowdsale.tokenSold()).to.equal(amount)
+				expect(await crowdsale.tokensSold()).to.equal(amount)
 			})
 
 			it('emits a buy event', async () => {
