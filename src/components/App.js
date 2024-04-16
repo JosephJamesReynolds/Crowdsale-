@@ -35,7 +35,7 @@ function App() {
 
     // Fetch Chain Id
     const { chainId } = await provider.getNetwork();
-
+    console.log(chainId);
     // Initiate contracts
     const token = new ethers.Contract(
       config[chainId].token.address,

@@ -14,7 +14,7 @@ async function main() {
 
   // Deploy token
   const Token = await hre.ethers.getContractFactory("Token");
-  let token = await Token.deploy(NAME, SYMBOL, MAX_SUPPLY);
+  const token = await Token.deploy(NAME, SYMBOL, MAX_SUPPLY);
 
   await token.deployed();
   console.log(`Token deployed to: ${token.address}\n`);
