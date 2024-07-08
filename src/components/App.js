@@ -1,118 +1,199 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Container } from "react-bootstrap";
+import {
+  useAccount,
+  useNetwork,
+  useContract,
+  useProvider,
+  useSigner,
+  useConnect,
+} from "wagmi";
+import { WagmiConfig, createClient, configureChains } from "wagmi";
+import { publicProvider } from "wagmi/providers/public";
+import { mainnet, hardhat } from "wagmi/chains";
 import { ethers } from "ethers";
+import { InjectedConnector } from "wagmi/connectors/injected";
 
 // Components
 import Navigation from "./Navigation";
+import Buy from "./Buy";
+import Progress from "./Progress";
 import Info from "./Info";
 import Loading from "./Loading";
-import Progress from "./Progress";
-import Buy from "./Buy";
 
-// ABIs
-import TOKEN_ABI from "../abis/Token.json";
+// Artifacts
 import CROWDSALE_ABI from "../abis/Crowdsale.json";
+import TOKEN_ABI from "../abis/Token.json";
 
 // Config
 import config from "../config.json";
 
-function App() {
-  const [provider, setProvider] = useState(null);
-  const [crowdsale, setCrowdsale] = useState(null);
+// Configure wagmi
+const { provider, webSocketProvider } = configureChains(
+  [mainnet, hardhat],
+  [publicProvider()]
+);
 
-  const [account, setAccount] = useState(null);
-  const [accountBalance, setAccountBalance] = useState(null);
+const client = createClient({
+  autoConnect: true,
+  provider,
+  webSocketProvider,
+});
 
+function AppContent({ onAccountChange, currentAccount }) {
+  const { address: account } = useAccount();
+  const { chain } = useNetwork();
+  const provider = useProvider();
+  const { data: signer } = useSigner();
+  const { connect } = useConnect({
+    connector: new InjectedConnector(),
+  });
+
+  const [accountBalance, setAccountBalance] = useState(0);
   const [price, setPrice] = useState(0);
   const [maxTokens, setMaxTokens] = useState(0);
   const [tokensSold, setTokensSold] = useState(0);
-
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadBlockchainData = async () => {
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    setProvider(provider);
+  const tokenContract = useContract({
+    address: chain ? config[chain.id]?.token.address : undefined,
+    abi: TOKEN_ABI,
+    signerOrProvider: signer || provider,
+  });
 
-    // Fetch Chain Id
-    const { chainId } = await provider.getNetwork();
-    console.log(chainId);
-    // Initiate contracts
-    const token = new ethers.Contract(
-      config[chainId].token.address,
-      TOKEN_ABI,
-      provider
-    );
-    const crowdsale = new ethers.Contract(
-      config[chainId].crowdsale.address,
-      CROWDSALE_ABI,
-      provider
-    );
-    setCrowdsale(crowdsale);
+  const crowdsaleContract = useContract({
+    address: chain ? config[chain.id]?.crowdsale.address : undefined,
+    abi: CROWDSALE_ABI,
+    signerOrProvider: signer || provider,
+  });
 
-    // Fetch account
-    const accounts = await window.ethereum.request({
-      method: "eth_requestAccounts",
-    });
-    const account = ethers.utils.getAddress(accounts[0]);
-    setAccount(account);
+  const updateAccountBalance = useCallback(async () => {
+    if (currentAccount && tokenContract) {
+      const balance = await tokenContract.balanceOf(currentAccount);
+      setAccountBalance(ethers.utils.formatEther(balance));
+    }
+  }, [currentAccount, tokenContract]);
 
-    // Fetch account balance
-    const accountBalance = ethers.utils.formatUnits(
-      await token.balanceOf(account),
-      18
-    );
-    setAccountBalance(accountBalance);
+  const loadBlockchainData = useCallback(async () => {
+    setIsLoading(true);
+    if (!currentAccount || !chain || !tokenContract || !crowdsaleContract) {
+      setIsLoading(false);
+      return;
+    }
 
-    // Fetch price
-    const price = ethers.utils.formatUnits(await crowdsale.price());
-    setPrice(price);
+    try {
+      await updateAccountBalance();
 
-    // Fetch max tokens
-    const maxTokens = ethers.utils.formatUnits(await crowdsale.maxTokens());
-    setMaxTokens(maxTokens);
+      const priceInWei = await crowdsaleContract.price();
+      setPrice(ethers.utils.formatEther(priceInWei));
 
-    //Fetch tokens sold
-    const tokensSold = ethers.utils.formatUnits(await crowdsale.tokensSold());
-    setTokensSold(tokensSold);
+      const maxTokensInWei = await crowdsaleContract.maxTokens();
+      setMaxTokens(ethers.utils.formatEther(maxTokensInWei));
 
-    setIsLoading(false);
-
-    // Add to state
-  };
+      const tokensSoldInWei = await crowdsaleContract.tokensSold();
+      setTokensSold(ethers.utils.formatEther(tokensSoldInWei));
+    } catch (error) {
+      console.error("Error fetching blockchain data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [
+    currentAccount,
+    chain,
+    tokenContract,
+    crowdsaleContract,
+    updateAccountBalance,
+  ]);
 
   useEffect(() => {
-    if (isLoading) {
-      loadBlockchainData();
+    loadBlockchainData();
+  }, [loadBlockchainData]);
+
+  useEffect(() => {
+    if (onAccountChange) {
+      onAccountChange(account);
     }
-  }, [isLoading]);
+  }, [account, onAccountChange]);
+
+  const handleConnectWallet = async () => {
+    await connect();
+  };
 
   return (
     <Container>
-      <Navigation />
+      <Navigation onAccountChange={onAccountChange} />
 
-      <h1 className="my-4 text-center">Introducing Joseph Money!</h1>
-
-      {isLoading ? (
-        <Loading />
+      {!currentAccount ? (
+        <div className="py-4 text-center">
+          <h2 className="my-4" style={{ fontSize: "3rem" }}>
+            Welcome to Joseph's Money Crowdsale!
+          </h2>
+          <button
+            onClick={handleConnectWallet}
+            className="btn btn-primary btn-lg"
+            style={{ fontSize: "2.5rem", padding: "1rem 1.5rem" }} // Adjust font size and padding as needed
+          >
+            Connect your wallet
+          </button>
+          <p className="mt-3" style={{ fontSize: "2.5rem" }}>
+            {" "}
+            to get started.
+          </p>
+        </div>
       ) : (
         <>
-          <p className="text-center">
-            <strong>Current Price:</strong> {price} ETH
-          </p>
-          <Buy
-            provider={provider}
-            price={price}
-            crowdsale={crowdsale}
-            setIsLoading={setIsLoading}
+          <h1 className="my-4 text-center">Introducing Joseph Money!</h1>
+
+          {isLoading ? (
+            <Loading />
+          ) : (
+            <>
+              <p className="text-center">
+                <strong>Current Price:</strong> {parseFloat(price).toFixed(3)}{" "}
+                ETH
+              </p>
+              <Buy
+                account={currentAccount}
+                signer={signer}
+                price={price}
+                crowdsale={crowdsaleContract}
+                setIsLoading={setIsLoading}
+                updateAccountBalance={updateAccountBalance}
+                loadBlockchainData={loadBlockchainData}
+              />
+              <Progress
+                maxTokens={parseFloat(maxTokens).toFixed(0)}
+                tokensSold={parseFloat(tokensSold).toFixed(0)}
+              />
+            </>
+          )}
+
+          <hr />
+
+          <Info
+            account={currentAccount}
+            accountBalance={parseFloat(accountBalance).toFixed(2)}
           />
-          <Progress maxTokens={maxTokens} tokensSold={tokensSold} />
         </>
       )}
-
-      <hr />
-
-      {account && <Info account={account} accountBalance={accountBalance} />}
     </Container>
+  );
+}
+
+function App() {
+  const [currentAccount, setCurrentAccount] = useState(null);
+
+  const handleAccountChange = (newAccount) => {
+    setCurrentAccount(newAccount);
+  };
+
+  return (
+    <WagmiConfig client={client}>
+      <AppContent
+        onAccountChange={handleAccountChange}
+        currentAccount={currentAccount}
+      />
+    </WagmiConfig>
   );
 }
 

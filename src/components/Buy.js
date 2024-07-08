@@ -6,36 +6,42 @@ import Col from "react-bootstrap/Col";
 import Spinner from "react-bootstrap/Spinner";
 import { ethers } from "ethers";
 
-const Buy = ({ provider, price, crowdsale, setIsLoading }) => {
+const Buy = ({
+  signer,
+  price,
+  crowdsale,
+  setIsLoading,
+  updateAccountBalance,
+  loadBlockchainData,
+}) => {
   const [amount, setAmount] = useState("0");
   const [isWaiting, setIsWaiting] = useState(false);
 
   const buyHandler = async (e) => {
     e.preventDefault();
     setIsWaiting(true);
+    setIsLoading(true);
 
     try {
-      const signer = await provider.getSigner();
-
-      // Need to calculate the requierd ETH in order to buy tokens...
-      const value = ethers.utils.parseUnits(
-        (amount * price).toString(),
-        "ether"
-      );
-      const formattedAmount = ethers.utils.parseUnits(
-        amount.toString(),
-        "ether"
-      );
+      const ethAmount = (parseFloat(amount) * parseFloat(price)).toString();
+      const value = ethers.utils.parseEther(ethAmount);
+      const tokenAmount = ethers.utils.parseUnits(amount, "ether");
 
       const transaction = await crowdsale
         .connect(signer)
-        .buyTokens(formattedAmount, { value: value });
-      await transaction.wait();
-    } catch {
-      window.alert("User rejected or transaction reverted");
-    }
+        .buyTokens(tokenAmount, { value: value });
 
-    setIsLoading(true);
+      await transaction.wait();
+
+      await updateAccountBalance();
+      await loadBlockchainData();
+    } catch (error) {
+      console.error("Error buying tokens:", error);
+      window.alert("User rejected or transaction reverted");
+    } finally {
+      setIsWaiting(false);
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -56,7 +62,7 @@ const Buy = ({ provider, price, crowdsale, setIsLoading }) => {
             <Spinner animation="border" />
           ) : (
             <Button variant="primary" type="submit" style={{ width: "100%" }}>
-              Buy Tokens{" "}
+              Buy Tokens
             </Button>
           )}
         </Col>
