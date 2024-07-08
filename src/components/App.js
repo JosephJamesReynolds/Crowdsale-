@@ -10,7 +10,7 @@ import {
 } from "wagmi";
 import { WagmiConfig, createClient, configureChains } from "wagmi";
 import { publicProvider } from "wagmi/providers/public";
-import { mainnet, hardhat } from "wagmi/chains";
+import { sepolia, hardhat } from "wagmi/chains";
 import { ethers } from "ethers";
 import { InjectedConnector } from "wagmi/connectors/injected";
 
@@ -30,7 +30,7 @@ import config from "../config.json";
 
 // Configure wagmi
 const { provider, webSocketProvider } = configureChains(
-  [mainnet, hardhat],
+  [sepolia, hardhat],
   [publicProvider()]
 );
 
